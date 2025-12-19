@@ -1,39 +1,42 @@
-'use server';
+"use server";
 
-import React from 'react';
-import { Card } from '@/components/ui/card';
-import { OAuth2ConsentRequest } from '@ory/client';
-import ConsentForm from '@/components/consentForm';
-import { getOAuth2Api } from '@/ory/sdk/server';
+import { Consent } from "@ory/elements-react/theme";
+import config from "@/ory/ory.config";
+import { redirect } from "next/navigation";
+import { getServerSession } from "@ory/nextjs/app";
+import { getOAuth2Api } from "@/ory/sdk/server";
 
-export default async function Consent(props: { searchParams: Promise<{ consent_challenge: string }> }) {
+export default async function ConsentPage(props: {
+  searchParams: Promise<{ consent_challenge: string }>;
+}) {
+  const searchParams = await props.searchParams;
+  const consentChallenge = searchParams.consent_challenge;
 
-    const searchParams = await props.searchParams;
+  if (!consentChallenge) {
+    return redirect("/flow/login");
+  }
 
-    const consentChallenge = searchParams.consent_challenge ?? undefined;
-    let consentRequest: OAuth2ConsentRequest | undefined = undefined;
+  const session = await getServerSession();
 
-    if (!consentChallenge) {
-        return;
-    }
+  if (!session) {
+    redirect("/flow/login");
+  }
 
-    const hydra = await getOAuth2Api();
-    await hydra
-        .getOAuth2ConsentRequest({ consentChallenge })
-        .then(({ data }) => {
-            // Always show consent UI, even if Hydra indicates the request could be skipped.
-            consentRequest = data;
-        });
+  const hydra = await getOAuth2Api();
+  const { data: consentRequest } = await hydra.getOAuth2ConsentRequest({
+    consentChallenge: consentChallenge,
+  });
 
-    if (!consentRequest) {
-        return;
-    }
-
-    return (
-        <Card className="flex flex-col items-center w-full max-w-sm p-4">
-            <ConsentForm
-                request={consentRequest}
-            />
-        </Card>
-    );
+  return (
+    <Consent
+      config={config}
+      consentChallenge={consentRequest as any}
+      session={session}
+      csrfToken=''
+      formActionUrl='http://localhost:3000/api/consent/accept'
+      components={{
+        Card: {},
+      }}
+    />
+  );
 }
